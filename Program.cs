@@ -2,29 +2,16 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using ExtensionMethods;
 
 namespace RPN_Graphical_Calculator
 {
     static class Program
     {
-        /// <summary>
-        /// Is this a valid hex # containing character 0-9 a-f A-F ?
-        /// </summary>
-        public static bool IsHexNum(string hexVal)
-        {
-            foreach (char c in hexVal)
-            {
-                if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'))
-                    continue;
-                else 
-                    return false;
-            }
-            return true;
-        }
-
         public class RPN_Calculator:ICalcSession
         {
             private Stack expression_values;
@@ -170,9 +157,10 @@ namespace RPN_Graphical_Calculator
             {
                 
                 double dval;
-                bool expr_valid = true;
+                bool expr_valid = true;  //default values
                 hexExpression = false;
-                string answer;
+                string answer = "blank"; 
+                expression_values.Clear();  //clear list of any possible stale values
 
                 var val_array = Regex.Split(expr, "\\s+").Where(x => !string.IsNullOrEmpty(x)).ToArray() ;  //split expression into an array of tokens
                 int index = 0; string token;
@@ -201,7 +189,7 @@ namespace RPN_Graphical_Calculator
                         default:
                             if(hexExpression) //if its a valid hex, push on stack. else, invalid expression
                             {
-                                if (IsHexNum(token))
+                                if (token.IsHexNum())
                                 {
                                     expression_values.Push(Convert.ToInt32(token, 16));//convert to int, push on stack
                                 }
@@ -269,11 +257,20 @@ namespace RPN_Graphical_Calculator
                             expr_valid = true;
                         }
                         else
-                        {   //in extended mode and stack has more than 1 value. keep most recent # and discard the rest
-                            var finalAnswer = expression_values.Pop(); //get last evaluated token
-                            expression_values.Clear(); //discard the rest;
-                            expression_values.Push(finalAnswer);    //put last evaluated token back on the stack as the final answer
-                            expr_valid = true;
+                        {   //in extended mode and stack has more than 1 value. answer is all remaining values on stack(if entire expression was parsed)
+                            if (index == val_array.Length)
+                            {
+                                StringBuilder finalAnswer = new StringBuilder();
+                                while (expression_values.Count > 0)
+                                {
+                                    if (hexExpression)
+                                        finalAnswer.Prepend(Convert.ToInt32(expression_values.Pop()).ToString("X").ToString() + " "); //convert to hex before append
+                                    else
+                                        finalAnswer.Prepend(expression_values.Pop().ToString() + " ");  
+                                }
+                                answer = finalAnswer.ToString();    //put appended stack values as final answer
+                                expr_valid = true;
+                            }
                         }
                     }
                     else
@@ -288,12 +285,11 @@ namespace RPN_Graphical_Calculator
                 // if expr_valid is still true, then pop the answer is atop of the stack
                 if (expr_valid)
                 {
-                    if (hexExpression)
+                    if (hexExpression && answer.Equals("blank"))  //set answer only if hasn't been set previously
                     {
-                        int ianswer = Convert.ToInt32(expression_values.Pop());
-                        answer = ianswer.ToString("X"); //convert to an hex
+                        answer = Convert.ToInt32(expression_values.Pop()).ToString("X"); //convert to hex
                     }
-                    else
+                    else if(!hexExpression && answer.Equals("blank"))
                         answer = expression_values.Pop().ToString();
                 }
                 else
